@@ -11,6 +11,7 @@ import BookingScreen from './screens/SportFritid/BookingScreen';
 import PreviousScreen from './screens/SportFritid/PreviousScreen';
 import ProfileScreen from './screens/SportFritid/ProfileScreen';
 import MapScreen from './screens/SportFritid/MapScreen';
+import EditProfileScreen from './screens/SportFritid/EditProfileScreen';
 
 import { BookingsProvider } from './store/bookings';
 import { FiltersProvider } from './store/filters';
@@ -50,7 +51,11 @@ function ExploreStack() {
 function BookingsStack() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="Previous" component={PreviousScreen} options={{ title: 'Mine bookinger' }} />
+      <Stack.Screen
+        name="Previous"
+        component={PreviousScreen}
+        options={{ title: 'Mine bookinger' }}
+      />
     </Stack.Navigator>
   );
 }
@@ -59,6 +64,11 @@ function ProfileStack() {
   return (
     <Stack.Navigator>
       <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profil' }} />
+      <Stack.Screen
+        name="EditProfile"
+        component={EditProfileScreen}
+        options={{ title: 'Rediger profil' }}
+      />
     </Stack.Navigator>
   );
 }
@@ -80,3 +90,4 @@ export default function App() {
     </BookingsProvider>
   );
 }
+
