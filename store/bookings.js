@@ -22,7 +22,12 @@ export function BookingsProvider({ children }) {
   // Følg auth-state: når uid ændrer sig, så skift cache og UI
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
-      setUid(user?.uid || null);
+      const newUid = user?.uid || null;
+
+      // instant UI clean ved logout
+      if (!newUid) setBookings([]);
+
+      setUid(newUid);
     });
     return unsub;
   }, []);
@@ -54,7 +59,9 @@ export function BookingsProvider({ children }) {
   }, [bookings, ready, uid, storageKey]);
 
   const refreshFromRemote = async () => {
-    if (!uid) return;
+    const current = auth.currentUser;
+    if (!current) return;
+
     setLoadingRemote(true);
     try {
       const remote = await getMyBookings();

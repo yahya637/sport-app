@@ -1,5 +1,5 @@
 // screens/SportFritid/BookingScreen.js
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet, Alert } from "react-native";
 import { CommonActions } from "@react-navigation/native";
 import { g, colors } from "../../styles/styles";
@@ -8,8 +8,8 @@ import { useBookings } from "../../store/bookings";
 import PrimaryButton from "../../components/PrimaryButton";
 import ProgressSteps from "../../components/ProgressSteps";
 
-import { ensureSignedIn } from "../../services/auth";
-import { createBooking } from "../../services/bookings";
+
+import { createBooking, getBookedSlotsForVenue } from "../../services/bookings";
 
 /* Helpers */
 const daysAhead = 14;
@@ -48,7 +48,46 @@ export default function BookingScreen({ route, navigation }) {
   const [slot, setSlot] = useState(null);
   const [saving, setSaving] = useState(false);
 
+  // NEW
+  const [bookedSlots, setBookedSlots] = useState([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+
   const { add } = useBookings();
+
+  // Hent bookede tider for valgt dato
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBooked = async () => {
+      if (!venue || !selectedDate) return;
+
+      setLoadingSlots(true);
+      try {
+        // sørg for at vi har en user (anonym eller email) så rules altid matcher
+
+
+        const iso = selectedDate.toISOString().slice(0, 10);
+        const times = await getBookedSlotsForVenue(venue.id, iso);
+
+        if (!cancelled) {
+          setBookedSlots(Array.isArray(times) ? times : []);
+          // hvis den valgte slot nu er blevet booket af en anden, nulstil den
+          if (slot && Array.isArray(times) && times.includes(slot)) {
+            setSlot(null);
+          }
+        }
+      } catch {
+        if (!cancelled) setBookedSlots([]);
+      } finally {
+        if (!cancelled) setLoadingSlots(false);
+      }
+    };
+
+    loadBooked();
+    return () => {
+      cancelled = true;
+    };
+  }, [venue?.id, selectedDate]);
 
   if (!venue) {
     return (
@@ -59,7 +98,13 @@ export default function BookingScreen({ route, navigation }) {
   }
 
   const days = getNextDays(daysAhead);
-  const visibleSlots = (venue.slots || []).filter((s) => !slotIsPastToday(selectedDate, s));
+
+  // Filtrér: past tider + allerede bookede tider
+  const visibleSlots = (venue.slots || []).filter((s) => {
+    if (slotIsPastToday(selectedDate, s)) return false;
+    if (bookedSlots.includes(s)) return false;
+    return true;
+  });
 
   const confirm = async () => {
     if (!slot || !selectedDate) return;
@@ -67,25 +112,21 @@ export default function BookingScreen({ route, navigation }) {
     try {
       setSaving(true);
 
-      // sikre at vi har en user (anonym eller email)
-      await ensureSignedIn();
-
-      const iso = selectedDate.toISOString().slice(0, 10); // YYYY-MM-DD
-
-      // 1) Gem i Firestore
-     const created = await createBooking({
-      venueId: venue.id,
-      venueName: venue.name,
-      city: venue.city,
-      pricePerHour: venue.pricePerHour,
-      dateISO: iso,
-      time: slot,
-      });
  
+      const iso = selectedDate.toISOString().slice(0, 10);
 
-      // 2) Gem lokalt også (så Previous/Profile stadig virker indtil vi flytter dem)
+      const created = await createBooking({
+        venueId: venue.id,
+        venueName: venue.name,
+        city: venue.city,
+        pricePerHour: venue.pricePerHour,
+        dateISO: iso,
+        time: slot,
+      });
+
       add({
-        id: created.id, // brug Firestore id
+        id: created.id,
+        slotKey: created.slotKey,
         venueId: venue.id,
         venueName: venue.name,
         city: venue.city,
@@ -120,11 +161,7 @@ export default function BookingScreen({ route, navigation }) {
         <Text style={styles.heading}>{venue.name}</Text>
         <Text style={styles.heading}>Dato</Text>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingVertical: 4 }}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 4 }}>
           {days.map((d) => {
             const focused = isSameDay(d, selectedDate);
             const label = d.toLocaleDateString("da-DK", {
@@ -141,9 +178,7 @@ export default function BookingScreen({ route, navigation }) {
                 }}
                 style={[styles.chip, focused ? styles.chipActive : styles.chipIdle]}
               >
-                <Text style={[styles.chipText, focused && styles.chipTextActive]}>
-                  {label}
-                </Text>
+                <Text style={[styles.chipText, focused && styles.chipTextActive]}>{label}</Text>
               </Pressable>
             );
           })}
@@ -153,26 +188,29 @@ export default function BookingScreen({ route, navigation }) {
       {/* Tider */}
       <View style={[g.card, { marginTop: 12 }]}>
         <Text style={styles.heading}>Tilgængelige tider</Text>
-        <View style={[g.row, { flexWrap: "wrap" }]}>
-          {visibleSlots.length === 0 ? (
-            <Text style={g.muted}>Ingen ledige tider på denne dato.</Text>
-          ) : (
-            visibleSlots.map((s) => {
-              const focused = slot === s;
-              return (
-                <Pressable
-                  key={s}
-                  onPress={() => setSlot(s)}
-                  style={[styles.timeChip, focused ? styles.timeChipActive : styles.timeChipIdle]}
-                >
-                  <Text style={[styles.timeText, focused && styles.timeTextActive]}>
-                    {s}
-                  </Text>
-                </Pressable>
-              );
-            })
-          )}
-        </View>
+
+        {loadingSlots ? (
+          <Text style={g.muted}>Indlæser tider…</Text>
+        ) : (
+          <View style={[g.row, { flexWrap: "wrap" }]}>
+            {visibleSlots.length === 0 ? (
+              <Text style={g.muted}>Ingen ledige tider på denne dato.</Text>
+            ) : (
+              visibleSlots.map((s) => {
+                const focused = slot === s;
+                return (
+                  <Pressable
+                    key={s}
+                    onPress={() => setSlot(s)}
+                    style={[styles.timeChip, focused ? styles.timeChipActive : styles.timeChipIdle]}
+                  >
+                    <Text style={[styles.timeText, focused && styles.timeTextActive]}>{s}</Text>
+                  </Pressable>
+                );
+              })
+            )}
+          </View>
+        )}
       </View>
 
       <PrimaryButton

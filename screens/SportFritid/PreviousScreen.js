@@ -5,9 +5,9 @@ import { useFocusEffect } from "@react-navigation/native";
 import { g, colors } from "../../styles/styles";
 import BottomBar from "../../components/BottomBar";
 
-import { ensureSignedIn } from "../../services/auth";
+
 import { useBookings } from "../../store/bookings";
-import { deleteMyBooking, clearMyBookings } from "../../services/bookings";
+import { deleteMyBooking } from "../../services/bookings";
 
 const fmt = (iso, time) => {
   try {
@@ -24,10 +24,10 @@ const fmt = (iso, time) => {
 };
 
 export default function PreviousScreen({ navigation }) {
-  const { bookings, ready, loadingRemote, refreshFromRemote, removeLocal, clearLocal } = useBookings();
+  const { bookings, ready, loadingRemote, refreshFromRemote, removeLocal } = useBookings();
 
   const load = async () => {
-    await ensureSignedIn();
+   
     await refreshFromRemote();
   };
 
@@ -37,7 +37,7 @@ export default function PreviousScreen({ navigation }) {
     }, [])
   );
 
-  const onDeleteOne = (id) => {
+  const onDeleteOne = (item) => {
     Alert.alert("Slet booking", "Er du sikker?", [
       { text: "Annuller", style: "cancel" },
       {
@@ -45,8 +45,8 @@ export default function PreviousScreen({ navigation }) {
         style: "destructive",
         onPress: async () => {
           try {
-            await deleteMyBooking(id);
-            removeLocal(id); // UI instant
+            await deleteMyBooking(item.id, item.slotKey);
+            removeLocal(item.id); // UI instant
           } catch (e) {
             Alert.alert("Fejl", e?.message || "Kunne ikke slette booking.");
           } finally {
@@ -57,27 +57,7 @@ export default function PreviousScreen({ navigation }) {
     ]);
   };
 
-  const onClearAll = () => {
-    if (!bookings || bookings.length === 0) return;
 
-    Alert.alert("Ryd alle", "Vil du slette alle dine bookinger?", [
-      { text: "Annuller", style: "cancel" },
-      {
-        text: "Ryd alle",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await clearMyBookings();
-            clearLocal(); // UI instant
-          } catch (e) {
-            Alert.alert("Fejl", e?.message || "Kunne ikke rydde bookinger.");
-          } finally {
-            await refreshFromRemote();
-          }
-        },
-      },
-    ]);
-  };
 
   if (!ready || loadingRemote) {
     return (
@@ -109,8 +89,6 @@ export default function PreviousScreen({ navigation }) {
                 <View style={g.card}>
                   <View style={g.rowBetween}>
                     <Text style={[g.text, s.bold]}>{item.venueName || "Venue"}</Text>
-
-                    {/* force lys farve her */}
                     <Text style={s.price}>{price} kr./t</Text>
                   </View>
 
@@ -121,7 +99,11 @@ export default function PreviousScreen({ navigation }) {
                   </Text>
 
                   <View style={[g.rowBetween, s.mt10]}>
-                    <Pressable onPress={() => onDeleteOne(item.id)} hitSlop={10} style={s.linkHit}>
+                    <Pressable
+                      onPress={() => onDeleteOne(item)}
+                      hitSlop={10}
+                      style={s.linkHit}
+                    >
                       <Text style={s.linkDanger}>Slet</Text>
                     </Pressable>
                     <View />
@@ -131,9 +113,7 @@ export default function PreviousScreen({ navigation }) {
             }}
           />
 
-          <Pressable onPress={onClearAll} hitSlop={10} style={s.clearAll}>
-            <Text style={s.linkMuted}>Ryd alle</Text>
-          </Pressable>
+
         </>
       )}
 
@@ -148,7 +128,6 @@ const s = StyleSheet.create({
   mt8: { marginTop: 8 },
   mt10: { marginTop: 10 },
   pb80: { paddingBottom: 80 },
-  clearAll: { alignSelf: "center", marginTop: 6 },
   linkHit: { paddingVertical: 4, paddingHorizontal: 2 },
   linkDanger: { color: colors.danger, fontWeight: "800" },
   linkMuted: { color: colors.textMuted, fontWeight: "800" },

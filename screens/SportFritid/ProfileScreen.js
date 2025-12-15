@@ -11,23 +11,17 @@ import { SPORTS, SPORT_IMAGES } from "../../data/sports";
 import { getVenueById } from "../../data/venues";
 
 import { ensureSignedIn, logout } from "../../services/auth";
-import { ensureProfile, getMyProfile } from "../../services/profile";
-import { clearMyBookings } from "../../services/bookings";
+import { getMyProfile } from "../../services/profile";
 import { auth } from "../../firebase";
 
 export default function ProfileScreen({ navigation }) {
-  const {
-    bookings = [],
-    refreshFromRemote,
-    clearLocal,
-  } = useBookings();
+  const { bookings = [], refreshFromRemote, clearLocal } = useBookings();
 
   const [profile, setProfile] = useState(null);
   const [memberSince, setMemberSince] = useState(null);
 
   const loadAll = async () => {
-    await ensureSignedIn();
-    await ensureProfile();
+   
 
     const p = await getMyProfile();
     setProfile(p);
@@ -35,7 +29,6 @@ export default function ProfileScreen({ navigation }) {
     const createdAt = p?.createdAt?.toDate ? p.createdAt.toDate() : null;
     setMemberSince(createdAt ? createdAt.toLocaleDateString("da-DK") : null);
 
-    // hold bookings i sync med den aktuelle user
     await refreshFromRemote();
   };
 
@@ -73,32 +66,6 @@ export default function ProfileScreen({ navigation }) {
 
       return { totalCount, hoursBooked, totalSpent, upcomingCount, recent5 };
     }, [bookings]);
-
-  const handleClear = () => {
-    if (!bookings || bookings.length === 0) return;
-
-    Alert.alert("Ryd alle bookinger", "Er du sikker?", [
-      { text: "Annuller", style: "cancel" },
-      {
-        text: "Ryd",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            // 1) slet i Firestore
-            await clearMyBookings();
-
-            // 2) ryd UI med det samme
-            clearLocal();
-
-            // 3) sync igen (så alt matcher)
-            await refreshFromRemote();
-          } catch (e) {
-            Alert.alert("Fejl", e?.message || "Kunne ikke rydde bookinger.");
-          }
-        },
-      },
-    ]);
-  };
 
   const user = auth.currentUser;
   const isAnonymous = !!user?.isAnonymous;
@@ -199,16 +166,18 @@ export default function ProfileScreen({ navigation }) {
       <View style={g.card}>
         <Text style={g.h2}>Seneste bookinger</Text>
         {recent5.length === 0 ? (
-          <Text style={[g.muted, { marginTop: 6 }]}>Ingen bookinger endnu.</Text>
+          <Text style={[g.muted, { marginTop: 6 }]}>
+            Ingen bookinger endnu.
+          </Text>
         ) : (
           <FlatList
             data={recent5}
             keyExtractor={(item, idx) => item?.id || `${idx}`}
             renderItem={({ item }) => {
               const venue = getVenueById(item?.venueId);
-              const price = item?.pricePerHour ?? item?.price ?? venuePrice(item?.venueId);
+              const price =
+                item?.pricePerHour ?? item?.price ?? venuePrice(item?.venueId);
 
-              // sportId kan være null i jeres model lige nu, så fallback
               const sName = item?.sportId ? sportName(item.sportId) : "Sport";
               const img =
                 item?.sportId && SPORT_IMAGES[item?.sportId]
@@ -219,12 +188,24 @@ export default function ProfileScreen({ navigation }) {
 
               return (
                 <View style={g.listItem}>
-                  {img ? <Image source={img} style={g.listThumb} /> : <View style={[g.listThumb, { backgroundColor: "#111827" }]} />}
+                  {img ? (
+                    <Image source={img} style={g.listThumb} />
+                  ) : (
+                    <View
+                      style={[
+                        g.listThumb,
+                        { backgroundColor: "#111827" },
+                      ]}
+                    />
+                  )}
 
                   <View style={{ flex: 1 }}>
-                    <Text style={g.listTitle}>{item?.venueName || venue?.name || "Ukendt venue"}</Text>
+                    <Text style={g.listTitle}>
+                      {item?.venueName || venue?.name || "Ukendt venue"}
+                    </Text>
                     <Text style={g.listSubtitle}>
-                      {sName} • {item?.dateISO || "—"}{item?.time ? ` • ${item.time}` : ""}
+                      {sName} • {item?.dateISO || "—"}
+                      {item?.time ? ` • ${item.time}` : ""}
                     </Text>
                   </View>
 
@@ -239,16 +220,9 @@ export default function ProfileScreen({ navigation }) {
         )}
       </View>
 
-      <View style={[g.rowBetween, { marginTop: 8 }]}>
-        <PrimaryButton
-          title="Ryd alle"
-          onPress={handleClear}
-          style={[g.btn, { flex: 1, backgroundColor: "#ef4444" }]}
-        />
-      </View>
-
       <BottomBar navigation={navigation} active="profile" />
     </View>
   );
 }
+
 
