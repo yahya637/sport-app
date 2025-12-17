@@ -53,3 +53,4 @@ export default function ProgressSteps({ current = 'sport', style }) {
     </View>
   );
 }
+
